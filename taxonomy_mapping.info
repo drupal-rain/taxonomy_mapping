@@ -1,0 +1,8 @@
+name = Taxonomy Mapping
+description = Allow a taxonomy term as a shadow term, reference to another term.
+package = Txonomy
+core = 7.x
+
+dependencies[] = entity
+dependencies[] = entityreference
+dependencies[] = taxonomy
