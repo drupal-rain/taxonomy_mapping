@@ -164,7 +164,7 @@ function taxonomy_mapping_pathauto_alias_alter(&$alias, &$context) {
       'sanitize' => FALSE, 
       'clear' => TRUE, 
       'callback' => 'pathauto_clean_token_values', 
-      'language' => (object) array('language' => $context['language']), 
-      'pathauto' => TRUE));
+      'language' => (object) array('language' => $context['language']), 'pathauto' => TRUE)
+    );
   }
 }
