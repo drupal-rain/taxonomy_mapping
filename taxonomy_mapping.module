@@ -121,31 +121,37 @@ function taxonomy_mapping_form_taxonomy_form_vocabulary_alter(&$form, &$form_sta
  * Submit function for taxonomy_form_vocabulary.
  */
 function taxonomy_mapping_form_taxonomy_form_vocabulary_submit($form, &$form_state) {
+  $fields = field_info_fields();
+  $instances = field_info_instances('taxonomy', $form_state['values']['machine_name']);
   if ($form_state['values']['taxonomy_mapping']) {
-    $field = array(
-      'locked' => TRUE, 
-      'field_name' => TAXONOMY_MAPPING, 
-      'type' => 'entityreference', 
-      'cardinality' => 1, 
-      'settings' => array(
-        'target_type' => 'taxonomy_term', 
-        'handler_settings' => array('target_bundles' => array()),
-      ),
-    );
-    field_create_field($field);
+    if (!isset($fields[TAXONOMY_MAPPING])) {
+      $field = array(
+        'locked' => TRUE, 
+        'field_name' => TAXONOMY_MAPPING, 
+        'type' => 'entityreference', 
+        'cardinality' => 1, 
+        'settings' => array(
+          'target_type' => 'taxonomy_term', 
+          'handler_settings' => array('target_bundles' => array()),
+        ),
+      );
+      field_create_field($field);
+    }
     
-    $instance = array(
-      'field_name' => TAXONOMY_MAPPING, 
-      'entity_type' => 'taxonomy_term', 
-      'bundle' => $form_state['values']['machine_name'], 
-      'label' => t(TAXONOMY_MAPPING), 
-      'widget' => array('type' => 'entityreference_autocomplete'), 
-      'settings' => array(
-        'target_type' => 'taxonomy_term', 
-        'handler_settings' => array('target_bundles' => array()),
-      ),
-    );
-    field_create_instance($instance);
+    if (!isset($instances[TAXONOMY_MAPPING])) {
+      $instance = array(
+        'field_name' => TAXONOMY_MAPPING, 
+        'entity_type' => 'taxonomy_term', 
+        'bundle' => $form_state['values']['machine_name'], 
+        'label' => t(TAXONOMY_MAPPING), 
+        'widget' => array('type' => 'entityreference_autocomplete'), 
+        'settings' => array(
+          'target_type' => 'taxonomy_term', 
+          'handler_settings' => array('target_bundles' => array()),
+        ),
+      );
+      field_create_instance($instance);
+    }
   }
 }
 
