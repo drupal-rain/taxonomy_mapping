@@ -14,7 +14,7 @@ function taxonomy_mapping_init() {
   if (arg(1) == 'term' && is_numeric(arg(2)) && !arg(3)) {
     $tid = arg(2);
     $taxonomy = entity_load_single('taxonomy_term', $tid);
-    if (taxonomy_mapping_is_mapping_to($taxonomy)) {
+    if (taxonomy_mapping_taxonomy_is_mapping($taxonomy)) {
       $langcode = field_language('taxonomy_term', $taxonomy, TAXONOMY_MAPPING);
       if (!empty($taxonomy->{TAXONOMY_MAPPING}) && count($taxonomy->{TAXONOMY_MAPPING}[$langcode]) > 0) {
         $tid_target = $taxonomy->{TAXONOMY_MAPPING}[$langcode][0]['target_id'];
@@ -42,19 +42,16 @@ function taxonomy_mapping_field_attach_view_alter(&$output, $context) {
       // Replate the placeholder tag with the target tag.
       foreach ($items as $delta => $item) {
         $taxonomy = $item['taxonomy_term'];
-        if (taxonomy_mapping_is_mapping_to($taxonomy)) {
-          $langcode = field_language('taxonomy_term', $taxonomy, TAXONOMY_MAPPING);
-          if (!empty($taxonomy->{TAXONOMY_MAPPING}) && count($taxonomy->{TAXONOMY_MAPPING}[$langcode]) > 0) {
-            $tid_target = $taxonomy->{TAXONOMY_MAPPING}[$langcode][0]['target_id'];
-            $taxonomy_target = taxonomy_term_load($tid_target);
-            // Remove the placeholder tag.
-            $items[$delta] = array(
-              'tid' => $tid_target, 
-              'taxonomy_term' => $taxonomy_target,
-            );
-          }
+        if (taxonomy_mapping_taxonomy_is_mapping($taxonomy)) {
+          $taxonomy_target = taxonomy_mapping_taxonomy_target($taxonomy);
+          // Replace the placeholder term with the target term.
+          $items[$delta] = array(
+            'tid' => $taxonomy_target->tid,
+            'taxonomy_term' => $taxonomy_target,
+          );
         }
       }
+      // Clear the duplicate terms.
       $items = _taxonomy_mapping_uniquify_items($items);
       // Render the new items.
       $field_info = field_info_field($field_name);
@@ -68,6 +65,8 @@ function taxonomy_mapping_field_attach_view_alter(&$output, $context) {
 
 /**
  * Helper function to remove duplicated items.
+ * 
+ * @param array $items_old
  */
 function _taxonomy_mapping_uniquify_items($items_old) {
   $tids = array();
@@ -83,9 +82,18 @@ function _taxonomy_mapping_uniquify_items($items_old) {
 }
 
 /**
+ * Check if the vocabulary (bundle) has the taxonomy_mapping field.
+ */
+function taxonomy_mapping_vocab_is_mapping($vocab) {
+  $info = field_info_fields();
+
+  return in_array($vocab, $info[TAXONOMY_MAPPING]['bundles']['taxonomy_term']);
+}
+
+/**
  * Check if the taxonomy (entity) has the taxonomy_mapping field.
  */
-function taxonomy_mapping_is_mapping_to($taxonomy) {
+function taxonomy_mapping_taxonomy_is_mapping($taxonomy) {
   if (isset($taxonomy->{TAXONOMY_MAPPING})) {
     return TRUE;
   }
@@ -94,16 +102,32 @@ function taxonomy_mapping_is_mapping_to($taxonomy) {
 }
 
 /**
- * Check if the vocabulary (bundle) has the taxonomy_mapping field.
+ * Give the placeholder taxonomy, return the target taxonomy. 
+ * 
+ * @todo new param int $level
+ *   Control how many level to get the mapped term. Default -1 mean infinite.
+ * 
+ * @param Entity $taxonomy
  */
-function taxonomy_mapping_can_mapping_to($vocab) {
-  $info = field_info_fields();
-  
-  return in_array($vocab, $info[TAXONOMY_MAPPING]['bundles']['taxonomy_term']);
+function taxonomy_mapping_taxonomy_target($taxonomy) {
+  if (taxonomy_mapping_taxonomy_is_mapping($taxonomy)) {
+    $langcode = field_language('taxonomy_term', $taxonomy, TAXONOMY_MAPPING);
+    if (!empty($taxonomy->{TAXONOMY_MAPPING}) && count($taxonomy->{TAXONOMY_MAPPING}[$langcode]) > 0) {
+      $tid_target = $taxonomy->{TAXONOMY_MAPPING}[$langcode][0]['target_id'];
+      $taxonomy_target = taxonomy_term_load($tid_target);
+    }
+    // Loop to get the final destination.
+    return taxonomy_mapping_taxonomy_target($taxonomy_target);
+  }
+  else {
+    return $taxonomy;
+  }
 }
 
 /**
  * Implements hook_form_FORM_ID_alter().
+ * 
+ * Add configuration to the vocabulary edit form.
  */
 function taxonomy_mapping_form_taxonomy_form_vocabulary_alter(&$form, &$form_state, $form_id) {
   $vocab = $form['old_machine_name']['#value'];
@@ -111,7 +135,7 @@ function taxonomy_mapping_form_taxonomy_form_vocabulary_alter(&$form, &$form_sta
     '#type' => 'checkbox', 
     '#title' => t('Taxonomy Mapping'), 
     '#description' => t('Whether turn on Taxonomy Mapping on this vocabulary'), 
-    '#default_value' => taxonomy_mapping_can_mapping_to($vocab),
+    '#default_value' => taxonomy_mapping_vocab_is_mapping($vocab),
   );
   
   $form['#submit'][] = 'taxonomy_mapping_form_taxonomy_form_vocabulary_submit';
@@ -156,14 +180,18 @@ function taxonomy_mapping_form_taxonomy_form_vocabulary_submit($form, &$form_sta
 }
 
 /**
- * Implements hook_pathauto_paths_alias_alter(). Integrate with pathauto if it
- * exists.
+ * Implements hook_pathauto_paths_alias_alter().
+ * 
+ * Integrate with pathauto if it exists.
  */
 function taxonomy_mapping_pathauto_alias_alter(&$alias, &$context) {
   $ops = array('insert', 'update', 'bulkupdate');
-  if (in_array($context['op'], $ops) && $context['module'] == 'taxonomy_term' && taxonomy_mapping_can_mapping_to($context['type']) && isset($context['data']['term'])) {
+  if (in_array($context['op'], $ops)
+    && $context['module'] == 'taxonomy_term'
+    && taxonomy_mapping_vocab_is_mapping($context['type']) && isset($context['data']['term'])
+  ) {
     $taxonomy = $context['data']['term'];
-    if (taxonomy_mapping_is_mapping_to($taxonomy)) {
+    if (taxonomy_mapping_taxonomy_is_mapping($taxonomy)) {
       $context['pattern'] .= '-mapping-' . $taxonomy->{TAXONOMY_MAPPING}[$context['language']][0]['target_id'];
     }
     $alias = $alias = token_replace($context['pattern'], $context['data'], array(
